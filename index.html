@@ -2,70 +2,217 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Test Page</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>P2P Chat Test</title>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
-        body {
-            font-family: sans-serif;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-            background-color: #f4f4f9;
+        :root {
+            --bg-dark: #0f0f0f;
+            --bg-card: #1a1a1a;
+            --accent: #5865f2;
+            --text-main: #ffffff;
+            --text-muted: #a0a0a0;
+            --nav-height: 75px;
         }
-        .container {
-            text-align: center;
-            padding: 2rem;
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        
+        /* The dvh unit ensures the app fits perfectly even when browser bars move */
+        body, html { 
+            margin: 0; padding: 0; 
+            height: 100dvh; width: 100%;
+            font-family: -apple-system, system-ui, sans-serif; 
+            background: var(--bg-dark); 
+            color: var(--text-main); 
+            overflow: hidden; 
         }
-        button {
-            padding: 10px 20px;
-            font-size: 1rem;
-            background-color: #4CAF50;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            transition: background 0.3s;
+
+        /* Login Screen - Stays on top until you enter a name */
+        #login-overlay { 
+            position: fixed; inset: 0; 
+            background: var(--bg-dark); 
+            z-index: 2000; 
+            display: flex; flex-direction: column; 
+            align-items: center; justify-content: center; 
+            padding: 20px; 
         }
-        button:hover {
-            background-color: #45a049;
+
+        .login-card { 
+            background: var(--bg-card); padding: 30px; 
+            border-radius: 16px; width: 100%; max-width: 340px; 
+            text-align: center; border: 1px solid #333;
         }
-        input {
-            padding: 8px;
-            margin-bottom: 15px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
+
+        /* Main App Container */
+        #app { 
+            display: flex; flex-direction: column; 
+            height: 100dvh; width: 100%;
+            visibility: hidden; /* Hidden until login */
+        }
+
+        .header { 
+            height: 60px; background: var(--bg-card); 
+            display: flex; align-items: center; 
+            padding: 0 20px; justify-content: space-between;
+            border-bottom: 1px solid #333;
+        }
+
+        /* Screen Areas */
+        .screen { 
+            flex: 1; overflow-y: auto; 
+            display: none; flex-direction: column; 
+            padding: 15px; padding-bottom: 150px; /* Space for input and nav */
+        }
+        .screen.active { display: flex; }
+
+        /* Chat Bubbles */
+        #chat-list { display: flex; flex-direction: column; gap: 10px; }
+        .msg { 
+            max-width: 80%; padding: 12px 16px; 
+            border-radius: 18px; font-size: 15px; 
+        }
+        .received { background: #2f2f2f; align-self: flex-start; border-bottom-left-radius: 4px; }
+        .sent { background: var(--accent); align-self: flex-end; border-bottom-right-radius: 4px; }
+
+        /* Input Bar - Fixed above the Nav Bar */
+        .input-container { 
+            position: fixed; bottom: var(--nav-height); 
+            width: 100%; background: var(--bg-dark); 
+            padding: 10px; border-top: 1px solid #333;
+            display: flex; gap: 8px; z-index: 100;
+        }
+
+        input { 
+            background: #222; border: 1px solid #444; 
+            padding: 12px; border-radius: 25px; 
+            color: white; flex: 1; outline: none; font-size: 16px;
+        }
+
+        /* Bottom Nav Bar - Always visible at the very bottom */
+        nav { 
+            position: fixed; bottom: 0; 
+            width: 100%; height: var(--nav-height); 
+            background: var(--bg-card); 
+            display: flex; justify-content: space-around; 
+            align-items: center; border-top: 1px solid #333;
+            padding-bottom: env(safe-area-inset-bottom); /* Fix for iPhone notches */
+            z-index: 110;
+        }
+
+        .nav-item { color: var(--text-muted); font-size: 12px; font-weight: bold; text-align: center; }
+        .nav-item.active { color: var(--accent); }
+
+        button { 
+            background: var(--accent); border: none; 
+            padding: 10px 20px; border-radius: 20px; 
+            color: white; font-weight: bold; cursor: pointer;
         }
     </style>
 </head>
 <body>
 
-    <div class="container">
-        <h1>github test</h1>
-        <p>Type something below and click the button.</p>
-        <input type="text" id="userInput" placeholder="Type here...">
-        <br>
-        <button onclick="runTest()">Run Test</button>
-        <p id="output"></p>
+<div id="login-overlay">
+    <div class="login-card">
+        <h2>Nexus P2P</h2>
+        <input type="text" id="username" placeholder="Enter Username..." style="margin-bottom: 15px; width: 100%">
+        <button onclick="startApp()" style="width:100%">Join Chat</button>
+    </div>
+</div>
+
+<div id="app">
+    <div class="header">
+        <span id="my-id" style="font-weight:bold">Offline</span>
+        <span id="status" style="color:red; font-size:12px">● Disconnected</span>
     </div>
 
-    <script>
-        function runTest() {
-            const input = document.getElementById('userInput').value;
-            const output = document.getElementById('output');
-            
-            if (input.trim() === "") {
-                alert("The test works! (But the input was empty)");
-            } else {
-                output.innerText = "You entered: " + input;
-                console.log("Test successful for: " + input);
-            }
-        }
-    </script>
+    <div id="chat-screen" class="screen active">
+        <div id="chat-list"></div>
+        <div class="input-container">
+            <input type="text" id="msg-input" placeholder="Message...">
+            <button onclick="sendText()">Send</button>
+        </div>
+    </div>
 
+    <div id="friends-screen" class="screen">
+        <h3>Connect to Friend</h3>
+        <input type="text" id="friend-id" placeholder="Friend's Username" style="margin-bottom: 10px; width:100%">
+        <button onclick="connectToFriend()" style="width:100%">Connect</button>
+    </div>
+
+    <nav>
+        <div class="nav-item active" onclick="showScreen('chat-screen', this)">CHAT</div>
+        <div class="nav-item" onclick="showScreen('friends-screen', this)">FRIENDS</div>
+    </nav>
+</div>
+
+<script>
+    let peer, conn;
+
+    function startApp() {
+        const user = document.getElementById('username').value.trim();
+        if (!user) return;
+
+        peer = new Peer(user);
+
+        peer.on('open', (id) => {
+            document.getElementById('login-overlay').style.display = 'none';
+            document.getElementById('app').style.visibility = 'visible';
+            document.getElementById('my-id').innerText = id;
+            document.getElementById('status').innerText = "● Online";
+            document.getElementById('status').style.color = "#23a55a";
+        });
+
+        // Handle incoming connections
+        peer.on('connection', (incomingConn) => {
+            conn = incomingConn;
+            setupListeners();
+        });
+    }
+
+    function connectToFriend() {
+        const friendId = document.getElementById('friend-id').value.trim();
+        if (!friendId) return;
+        
+        conn = peer.connect(friendId);
+        setupListeners();
+    }
+
+    function setupListeners() {
+        conn.on('open', () => {
+            addMsg("System", "Direct tunnel established with " + conn.peer);
+            showScreen('chat-screen', document.querySelector('.nav-item'));
+        });
+
+        conn.on('data', (data) => {
+            addMsg(conn.peer, data, 'received');
+        });
+    }
+
+    function sendText() {
+        const input = document.getElementById('msg-input');
+        if (!conn || !conn.open) return alert("Connect to a friend first!");
+        
+        if (input.value) {
+            conn.send(input.value);
+            addMsg("You", input.value, 'sent');
+            input.value = '';
+        }
+    }
+
+    function addMsg(user, text, type = 'received') {
+        const div = document.createElement('div');
+        div.className = `msg ${type}`;
+        div.innerHTML = `<strong>${user}:</strong><br>${text}`;
+        document.getElementById('chat-list').appendChild(div);
+        document.getElementById('chat-screen').scrollTop = document.getElementById('chat-list').scrollHeight;
+    }
+
+    function showScreen(id, el) {
+        document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+        document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+        document.getElementById(id).classList.add('active');
+        el.classList.add('active');
+    }
+</script>
 </body>
 </html>
